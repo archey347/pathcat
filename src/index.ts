@@ -151,6 +151,57 @@ function pathcatInternal(template: string, params: Query<string>) {
 	return path;
 }
 
+type Pathcat<T> = <Path extends string>(
+	base: string,
+	path: Path,
+	...query: [ExtractRouteParams<Path>] extends [never]
+		? [query?: Query<Path>]
+		: [query: Query<Path>]
+) => T
+
+type BasedPathcat<T> = <Path extends string>(
+	path: Path,
+	...query: [ExtractRouteParams<Path>] extends [never]
+		? [query?: Query<Path>]
+		: [query: Query<Path>]
+) => T
+
+/**
+ * Wrap around an existing function that can take a url as a string
+ *
+ * @param fn - The function to wrap i.e. (path: string) => R
+ * @returns A function that can accept a (base, path, ...query) combination
+ */
+export function wrap<R>(
+  fn: (path: string) => R,
+): Pathcat<R>;
+
+/**
+ * Wrap around an existing function that can take a url as a string, but
+ * with a preset base
+ *
+ * @param base - Preset the base of any calls to this function
+ * @param fn - The function to wrap i.e. (path: string) => R
+ * @returns A function that can accept a (path, ...query) combination
+ */
+export function wrap<R>(
+  base: string,
+  fn: (path: string) => R,
+): BasedPathcat<R>;
+
+export function wrap<R>(
+	baseOrFn: string | ((path: string) => R),
+	fn?: ((path: string) => R)
+) {
+	if (typeof baseOrFn === 'string') {
+		let ret: BasedPathcat<R> = (path, ...query) => wrap(fn!)(baseOrFn, path, ...query);
+		return ret
+	}
+
+	let ret: Pathcat<R> = (base, path, ...query) => baseOrFn(pathcat(base, path, ...query))
+	return ret
+}
+
 /**
  * Create a function that wraps a base URL, this is useful for repeated usage of
  * pathcat on a specific base URL, for example when writing a client for an
@@ -162,42 +213,7 @@ function pathcatInternal(template: string, params: Query<string>) {
  */
 export function base(
 	base: string
-): <Path extends string>(
-	path: Path,
-	...query: [ExtractRouteParams<Path>] extends [never]
-		? [query?: Query<Path>]
-		: [query: Query<Path>]
-) => string {
-	return (path, ...query) => pathcat(base, path, ...query);
-}
-
-/**
- * Create a function that wraps around a function which can take a path
- *
- * @param fn - The function to wrap
- * @returns Function that can accept a (base, path, ...query) combination
- */
-export function wrap<R>(
-  fn: (path: string) => R,
-): <Path extends string>(
-  base: string,
-  path: Path,
-  ...query: [ExtractRouteParams<Path>] extends [never]
-    ? [query?: Query<Path>]
-    : [query: Query<Path>]
-) => R {
-  return (base, path, ...query): R => fn(pathcat(base, path, ...query));
-}
-
-export function wrapWithBase<R>(
-  base: string,
-  fn: (path: string) => R,
-): <Path extends string>(
-  path: Path,
-  ...query: [ExtractRouteParams<Path>] extends [never]
-    ? [query?: Query<Path>]
-    : [query: Query<Path>]
-) => R {
-  return (path, ...query): R => wrap(fn)(base, path, ...query);
+): BasedPathcat<string> {
+	return wrap<string>(base, (path: string) => { return path })
 }
 
